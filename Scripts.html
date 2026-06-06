@@ -1,0 +1,331 @@
+<script>
+  let globalTeamsRegistry = [];
+  let activeTeamContext = null;
+  let flatIdCacheForModalLookup = [];
+  let isAdminAuthenticated = false;
+
+  window.addEventListener('DOMContentLoaded', () => {
+    google.script.run
+      .withSuccessHandler(buildTeamsDashboard)
+      .withFailureHandler(handleViewError)
+      .getPartyData();
+  });
+
+  function buildTeamsDashboard(data) {
+    document.getElementById('loader').classList.add('hidden');
+    if (data.appLogo) {
+      document.getElementById('app-header-logo').src = data.appLogo;
+    }
+    globalTeamsRegistry = data.teams;
+    
+    calculateAndDisplayGrandTotal();
+    refreshFlatModalCache();
+    renderDashboardMenu();
+  }
+
+  function calculateAndDisplayGrandTotal() {
+    let grandTotal = 0;
+    globalTeamsRegistry.forEach(team => {
+      grandTotal += team.positionHolders.length + team.normalMembers.length;
+    });
+    
+    google.script.run
+      .withSuccessHandler(function(womenCountResponse) {
+        if (womenCountResponse && typeof womenCountResponse === 'number') {
+          grandTotal += womenCountResponse;
+        }
+        document.getElementById('header-total-count').innerText = "மொத்த உறுப்பினர்கள்: " + grandTotal;
+      })
+      .withFailureHandler(function() {
+        document.getElementById('header-total-count').innerText = "மொத்த உறுப்பினர்கள்: " + grandTotal;
+      })
+      .verifyAndFetchWomenData("");
+  }
+
+  function refreshFlatModalCache() {
+    flatIdCacheForModalLookup = [];
+    globalTeamsRegistry.forEach(team => {
+      flatIdCacheForModalLookup = [...flatIdCacheForModalLookup, ...team.positionHolders, ...team.normalMembers];
+    });
+  }
+
+  function renderDashboardMenu() {
+    document.getElementById('portfolio-workspace').classList.add('hidden');
+    const grid = document.getElementById('teams-grid-layout');
+    grid.innerHTML = '';
+    
+    globalTeamsRegistry.forEach((team, index) => {
+      const isLocked = team.isProtected;
+      const headcountText = isLocked ? "🔒 பாதுகாக்கப்பட்டது" : "மொத்த உறுப்பினர்கள்: " + (team.positionHolders.length + team.normalMembers.length);
+      const icon = isLocked ? "🔒" : "🚩";
+      
+      grid.innerHTML += `
+        <div onclick="handleTeamSelection(${index})" class="bg-white rounded-2xl border-2 border-slate-200 p-6 card-hover shadow-sm flex flex-col justify-between hover:border-tvk-maroon group">
+          <div>
+            <div class="w-12 h-12 rounded-xl bg-red-50 text-tvk-maroon border border-red-100 flex items-center justify-center text-xl font-bold mb-4 group-hover:bg-tvk-maroon group-hover:text-white transition-colors shadow-inner">
+              ${icon}
+            </div>
+            <h3 class="text-lg font-black text-slate-800 tracking-tight group-hover:text-tvk-maroon transition-colors">${team.teamName}</h3>
+            <p class="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">பாசறை அமைப்பு</p>
+          </div>
+          <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-slate-500">
+            <span class="text-xs font-semibold bg-slate-100 px-2.5 py-1 rounded-md">${headcountText}</span>
+            <span class="text-xs font-bold text-tvk-maroon group-hover:underline">விபரங்களைக் காண்க →</span>
+          </div>
+        </div>
+      `;
+    });
+
+    document.getElementById('teams-dashboard').classList.remove('hidden');
+  }
+
+  function handleTeamSelection(index) {
+    const selectedTeam = globalTeamsRegistry[index];
+    
+    if (selectedTeam.isProtected) {
+      const password = prompt("மகளிர் அணி விபரங்களைக் காண கடவுச்சொல்லை (Password) உள்ளிடவும்:");
+      if (password === null) return; 
+      
+      document.getElementById('loader').classList.remove('hidden');
+      document.getElementById('teams-dashboard').classList.add('hidden');
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          document.getElementById('loader').classList.add('hidden');
+          if (response.success) {
+            selectedTeam.positionHolders = response.positionHolders;
+            selectedTeam.normalMembers = response.normalMembers;
+            refreshFlatModalCache();
+            drilldownIntoTeam(selectedTeam);
+          } else {
+            alert(response.message);
+            renderDashboardMenu();
+          }
+        })
+        .withFailureHandler(handleViewError)
+        .verifyAndFetchWomenData(password);
+    } else {
+      drilldownIntoTeam(selectedTeam);
+    }
+  }
+
+  function drilldownIntoTeam(teamObject) {
+    activeTeamContext = teamObject;
+    document.getElementById('teams-dashboard').classList.add('hidden');
+    document.getElementById('search-input').value = ''; 
+    document.getElementById('empty-search-fallback').classList.add('hidden');
+    document.getElementById('active-team-header').innerText = activeTeamContext.teamName;
+    
+    renderRosterLayout(activeTeamContext.positionHolders, activeTeamContext.normalMembers);
+    document.getElementById('portfolio-workspace').classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function navigateBackToTeams() {
+    document.getElementById('portfolio-workspace').classList.add('hidden');
+    document.getElementById('teams-dashboard').classList.remove('hidden');
+    renderDashboardMenu();
+  }
+
+  function renderRosterLayout(executives, regularCadres) {
+    const posContainer = document.getElementById('position-holders-layout');
+    const memContainer = document.getElementById('normal-members-layout');
+    
+    document.getElementById('section-position-holders').style.display = executives.length > 0 ? 'block' : 'none';
+    document.getElementById('section-normal-members').style.display = regularCadres.length > 0 ? 'block' : 'none';
+
+    posContainer.innerHTML = '';
+    memContainer.innerHTML = '';
+
+    executives.forEach(person => {
+      posContainer.innerHTML += `
+        <div onclick="launchProfileModal('${person.id}', true)" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden card-hover flex flex-col border-t-4 border-t-tvk-maroon">
+          <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-5 flex items-center space-x-4">
+            <img class="w-14 h-14 rounded-full object-cover border-2 border-tvk-yellow bg-white shadow-sm" src="${person.imageUrl}" alt="${person.name}">
+            <div>
+              <h3 class="text-sm font-bold text-white tracking-tight leading-tight">${person.name}</h3>
+              <span class="inline-block mt-1 bg-tvk-yellow text-tvk-maroon text-[9px] font-black px-2 py-0.5 rounded tracking-wider uppercase">
+                ${person.position}
+              </span>
+            </div>
+          </div>
+          <div class="p-4 flex-grow flex flex-col justify-between bg-white">
+            <div>
+              <p class="text-xs font-bold text-tvk-maroon">📍 பகுதி: ${person.area}</p>
+            </div>
+            <span class="text-[10px] font-bold text-slate-400 mt-4 block text-right">தொடர்பு கொள்ள சொடுக்கவும் →</span>
+          </div>
+        </div>
+      `;
+    });
+
+    regularCadres.forEach(person => {
+      let clickEventStr = isAdminAuthenticated ? `launchProfileModal('${person.id}', true)` : `launchProfileModal('${person.id}', false)`;
+      memContainer.innerHTML += `
+        <div onclick="${clickEventStr}" class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col items-center text-center card-hover hover:border-tvk-maroon">
+          <img class="w-16 h-16 rounded-full object-cover ring-4 ring-slate-100 mb-2.5 shadow bg-white" src="${person.imageUrl}" alt="${person.name}">
+          <h3 class="text-xs font-bold text-slate-900 tracking-tight">${person.name}</h3>
+          <p class="text-[10px] font-bold text-tvk-maroon bg-red-50 border border-red-100 px-2 py-0.5 rounded mt-1 w-full truncate">📍 பகுதி: ${person.area}</p>
+          ${isAdminAuthenticated ? '<span class="text-[9px] font-extrabold text-emerald-600 mt-1 block">📞 போன் நம்பர் பார்க்க கிளிக் செய்யவும்</span>' : ''}
+        </div>
+      `;
+    });
+  }
+
+  function executeTeamRosterFilter() {
+    const query = document.getElementById('search-input').value.toLowerCase().trim();
+    const fallbackNotice = document.getElementById('empty-search-fallback');
+
+    if (query === '') {
+      fallbackNotice.classList.add('hidden');
+      renderRosterLayout(activeTeamContext.positionHolders, activeTeamContext.normalMembers);
+      return;
+    }
+
+    const filteredExecutives = activeTeamContext.positionHolders.filter(p => 
+      p.name.toLowerCase().includes(query) || p.position.toLowerCase().includes(query) || p.area.toLowerCase().includes(query)
+    );
+
+    const filteredGeneral = activeTeamContext.normalMembers.filter(p => 
+      p.name.toLowerCase().includes(query) || p.area.toLowerCase().includes(query)
+    );
+
+    if (filteredExecutives.length === 0 && filteredGeneral.length === 0) {
+      fallbackNotice.classList.remove('hidden');
+      renderRosterLayout([], []);
+    } else {
+      fallbackNotice.classList.add('hidden');
+      renderRosterLayout(filteredExecutives, filteredGeneral);
+    }
+  }
+
+  function launchProfileModal(id, isExecutiveOrAdmin) {
+    const person = flatIdCacheForModalLookup.find(item => item.id === id);
+    if (!person) return;
+
+    document.getElementById('modal-img').src = person.imageUrl;
+    document.getElementById('modal-img').alt = person.name;
+    document.getElementById('modal-name').innerText = person.name;
+    document.getElementById('modal-position').innerText = person.position;
+    document.getElementById('modal-area').innerHTML = `<span class="mr-1.5 text-tvk-maroon">📍</span> ${person.area}`;
+
+    const contactWrapper = document.getElementById('modal-contact-wrapper');
+    if (isExecutiveOrAdmin || isAdminAuthenticated) {
+      contactWrapper.classList.remove('hidden');
+      document.getElementById('modal-contact').innerHTML = `<span class="mr-1.5 text-tvk-maroon">📞</span> <a href="tel:${person.contact}" class="hover:underline">${person.contact}</a>`;
+    } else {
+      contactWrapper.classList.add('hidden');
+    }
+
+    const modal = document.getElementById('profile-modal');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+      modal.classList.remove('opacity-0');
+      modal.firstElementChild.classList.remove('scale-95');
+    }, 10);
+  }
+
+  function closeProfileModal() {
+    const modal = document.getElementById('profile-modal');
+    modal.classList.add('opacity-0');
+    modal.firstElementChild.classList.add('scale-95');
+    setTimeout(() => modal.classList.add('hidden'), 300);
+  }
+
+  /* Administrative Interface Subsystem Logic Router */
+  function toggleAdminPortalGate() {
+    const modal = document.getElementById('admin-modal');
+    if (modal.classList.contains('hidden')) {
+      document.getElementById('admin-auth-error').classList.add('hidden');
+      document.getElementById('admin-login-form').reset();
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.firstElementChild.classList.remove('scale-95');
+      }, 10);
+    } else {
+      modal.classList.add('opacity-0');
+      modal.firstElementChild.classList.add('scale-95');
+      setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+  }
+
+  function executeAdminAuthChallenge(event) {
+    event.preventDefault();
+    const user = document.getElementById('admin-user').value.trim();
+    const pass = document.getElementById('admin-pass').value.trim();
+    const submitBtn = document.getElementById('admin-submit-btn');
+    const errBox = document.getElementById('admin-auth-error');
+    
+    submitBtn.innerText = "சரிபார்க்கப்படுகிறது...";
+    submitBtn.disabled = true;
+    errBox.classList.add('hidden');
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        submitBtn.innerText = "உள்நுழை (Sign In)";
+        submitBtn.disabled = false;
+        if (res.success) {
+          isAdminAuthenticated = true;
+          document.getElementById('admin-badge').classList.remove('hidden');
+          
+          // Switch lock vector icon to explicit logout icon handle
+          document.getElementById('admin-gate-btn').innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          `;
+          document.getElementById('admin-gate-btn').onclick = executeAdminLogout;
+          document.getElementById('admin-gate-btn').title = "வெளியேறு (Logout)";
+          
+          toggleAdminPortalGate();
+          if(activeTeamContext) {
+            renderRosterLayout(activeTeamContext.positionHolders, activeTeamContext.normalMembers);
+          }
+        } else {
+          errBox.innerText = res.message;
+          errBox.classList.remove('hidden');
+        }
+      })
+      .withFailureHandler(function() {
+        submitBtn.innerText = "உள்நுழை (Sign In)";
+        submitBtn.disabled = false;
+        errBox.innerText = "அமைப்புப் பிழை! மீண்டும் முயலவும்.";
+        errBox.classList.remove('hidden');
+      })
+      .authenticateAdmin(user, pass);
+  }
+
+  function executeAdminLogout() {
+    isAdminAuthenticated = false;
+    document.getElementById('admin-badge').classList.add('hidden');
+    
+    const gateBtn = document.getElementById('admin-gate-btn');
+    gateBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+      </svg>
+    `;
+    gateBtn.onclick = toggleAdminPortalGate;
+    gateBtn.title = "நிர்வாகி உள்நுழைவு";
+    
+    if(activeTeamContext) {
+      renderRosterLayout(activeTeamContext.positionHolders, activeTeamContext.normalMembers);
+    }
+  }
+
+  document.getElementById('profile-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeProfileModal();
+  });
+
+  function handleViewError(error) {
+    console.error(error);
+    const loader = document.getElementById('loader');
+    loader.innerHTML = `
+      <div class="text-center p-6 bg-red-50 text-red-800 rounded-xl max-w-md mx-auto border border-red-200 shadow-sm">
+        <p class="font-bold">தரவுத்தள பிழை ஏற்பட்டுள்ளது!</p>
+        <p class="text-xs mt-1 text-red-600">${error.message || error}</p>
+      </div>
+    `;
+  }
+</script>

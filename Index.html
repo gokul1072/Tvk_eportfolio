@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8">
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <?!= include('src/Styles'); ?>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen flex flex-col">
+
+  <header class="tvk-flag-ribbon shadow-xl relative">
+    <div class="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div class="text-center sm:text-left flex-grow">
+        <h1 class="text-3xl font-black tracking-tight text-tvk-maroon drop-shadow-sm">தமிழக வெற்றி கழகம் (TVK)</h1>
+        
+        <div class="mt-3 inline-block bg-tvk-maroon border-2 border-white/40 slogan-glow rounded-2xl px-8 py-3 transform hover:scale-105 transition-all duration-300">
+          <span class="text-4xl sm:text-5xl font-extrabold text-tvk-yellow tracking-widest block drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+            வெடால்
+          </span>
+        </div>
+        <p class="text-slate-800 mt-3 text-sm font-bold tracking-wide">கட்சி நிர்வாகிகள் மற்றும் உறுப்பினர்களின் மின்னணு தொகுப்பு</p>
+        
+        <div class="mt-3 flex flex-wrap gap-2 justify-center sm:justify-start">
+          <span class="inline-block bg-white text-tvk-maroon text-[11px] font-extrabold px-3 py-1 rounded-full border border-tvk-maroon shadow-sm">
+            நிர்வாகிகள் மற்றும் உறுப்பினர்கள் பட்டியல்
+          </span>
+          <span id="header-total-count" class="inline-block bg-tvk-maroon text-tvk-yellow text-[11px] font-extrabold px-3 py-1 rounded-full border border-tvk-yellow/30 shadow-sm">
+            மொத்த உறுப்பினர்கள்: கணக்கிடப்படுகிறது...
+          </span>
+          <span id="admin-badge" class="hidden inline-block bg-emerald-600 text-white text-[11px] font-extrabold px-3 py-1 rounded-full shadow-sm animate-pulse">
+            🛡️ அட்மின் பிரிவு செயலில் உள்ளது
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-center shrink-0">
+        <div class="bg-white p-1.5 rounded-2xl shadow-md border-2 border-tvk-maroon">
+          <img id="app-header-logo" src="https://via.placeholder.com/80" alt="TVK லோகோ" class="w-16 h-16 sm:w-20 sm:h-20 object-contain rounded-xl">
+        </div>
+      </div>
+    </div>
+
+    <div class="absolute top-4 right-4 z-10">
+      <button onclick="toggleAdminPortalGate()" id="admin-gate-btn" class="bg-white/90 hover:bg-white text-tvk-maroon hover:text-red-700 p-2.5 rounded-full shadow-lg border border-tvk-maroon/20 transition-all duration-200 transform hover:scale-110 cursor-pointer focus:outline-none" title="நிர்வாகி உள்நுழைவு">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-10 flex-grow w-full">
+    <div id="loader" class="flex flex-col items-center justify-center py-20">
+      <div class="animate-spin rounded-full h-12 w-12 border-4 border-tvk-maroon border-t-tvk-yellow"></div>
+      <p class="mt-4 text-sm font-bold text-slate-500 tracking-wider">பாசறை விபரங்கள் சேகரிக்கப்படுகின்றன...</p>
+    </div>
+
+    <div id="teams-dashboard" class="hidden space-y-8">
+      <div class="border-b-4 border-tvk-maroon pb-2">
+        <h2 class="text-2xl font-black text-tvk-maroon uppercase tracking-wide">துணை அமைப்புகள் / பாசறைகள் பட்டியல்</h2>
+        <p class="text-slate-500 text-sm mt-1">கீழே உள்ள பாசறைகளில் ஒன்றை தேந்தெடுத்து விபரங்களைக் காணலாம்.</p>
+      </div>
+      <div id="teams-grid-layout" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+
+    <div id="portfolio-workspace" class="hidden space-y-10">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <button onclick="navigateBackToTeams()" class="flex items-center space-x-2 px-4 py-2 text-sm font-bold text-tvk-maroon bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors cursor-pointer w-fit">
+          <span>← பாசறைகள் பட்டியல் (முகப்புப் பக்கம்)</span>
+        </button>
+        <div class="relative max-w-md w-full">
+          <input 
+            type="text" 
+            id="search-input" 
+            oninput="executeTeamRosterFilter()"
+            placeholder="இங்கு தேடவும் (பெயர், பதவி அல்லது ஊர்)..." 
+            class="w-full pl-4 pr-4 py-2 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-tvk-maroon text-sm shadow-inner"
+          >
+        </div>
+      </div>
+
+      <div class="bg-tvk-maroon p-6 rounded-2xl text-white shadow border-b-4 border-tvk-yellow flex items-center justify-between">
+        <div>
+          <span class="text-xs uppercase tracking-widest font-bold text-tvk-yellow">தற்போதைய பாசறைப் பிரிவு</span>
+          <h2 id="active-team-header" class="text-2xl font-black tracking-tight"></h2>
+        </div>
+        <span class="text-2xl">🛡️</span>
+      </div>
+
+      <div id="empty-search-fallback" class="hidden text-center py-12 bg-white rounded-2xl border-2 border-dashed border-slate-200 max-w-md mx-auto p-6">
+        <span class="text-3xl">🔍</span>
+        <h3 class="text-base font-bold text-slate-700 mt-2">எந்தப் பதிவும் கிடைக்கவில்லை!</h3>
+        <p class="text-xs text-slate-400 mt-0.5">தேடலுக்குப் பொருத்தமான உறுப்பினர்கள் யாரும் இந்த பாசறையில் இல்லை.</p>
+      </div>
+
+      <section id="section-position-holders">
+        <div class="border-b-2 border-tvk-maroon pb-2 mb-6">
+          <h3 class="text-lg font-black text-tvk-maroon uppercase tracking-wide">முக்கிய நிர்வாகிகள் / பொறுப்பாளர்கள்</h3>
+        </div>
+        <div id="position-holders-layout" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+      </section>
+
+      <section id="section-normal-members">
+        <div class="border-b-2 border-slate-300 pb-2 mb-6">
+          <h3 class="text-lg font-black text-slate-700 uppercase tracking-wide">கழக உறுப்பினர்கள்</h3>
+        </div>
+        <div id="normal-members-layout" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="profile-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div class="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl border-4 border-tvk-yellow transform scale-95 transition-transform duration-300 flex flex-col">
+      <div class="bg-tvk-maroon p-6 text-white relative flex items-center space-x-4 border-b-4 border-tvk-yellow">
+        <img id="modal-img" class="w-24 h-24 rounded-full object-cover border-4 border-tvk-yellow shadow-md bg-white" src="" alt="">
+        <div>
+          <h3 id="modal-name" class="text-2xl font-black tracking-tight"></h3>
+          <p id="modal-position" class="inline-block mt-1 bg-tvk-yellow text-tvk-maroon text-xs font-black px-3 py-0.5 rounded-full uppercase tracking-wider shadow-sm"></p>
+        </div>
+        <button onclick="closeProfileModal()" class="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors focus:outline-none cursor-pointer">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div class="p-8 space-y-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
+          <div>
+            <h4 class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-1">பகுதி / ஒன்றியம் / வார்டு</h4>
+            <p id="modal-area" class="text-base font-bold text-slate-800 flex items-center"></p>
+          </div>
+          <div id="modal-contact-wrapper">
+            <h4 class="text-xs font-bold text-slate-400 tracking-widest uppercase mb-1">தொடர்பு எண்</h4>
+            <p id="modal-contact" class="text-base font-bold text-tvk-maroon flex items-center"></p>
+          </div>
+        </div>
+      </div>
+      <div class="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end">
+        <button onclick="closeProfileModal()" class="px-5 py-2 text-sm font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors cursor-pointer">விபரத்தை மூடு</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div class="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border-4 border-tvk-maroon transform scale-95 transition-transform duration-300 flex flex-col">
+      <div class="bg-tvk-maroon p-5 text-white relative border-b-4 border-tvk-yellow text-center">
+        <span class="text-3xl block mb-1">🛡️</span>
+        <h3 class="text-xl font-black tracking-tight">நிர்வாகி உள்நுழைவு (Admin Login)</h3>
+        <p class="text-xs text-tvk-yellow/80 mt-1">கழக மேம்பட்ட கட்டுப்பாட்டு அறை அணுகல்</p>
+        <button onclick="toggleAdminPortalGate()" class="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-full transition-colors focus:outline-none cursor-pointer">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <form id="admin-login-form" onsubmit="executeAdminAuthChallenge(event)" class="p-6 space-y-4">
+        <div id="admin-auth-error" class="hidden bg-red-50 text-red-700 text-xs font-bold p-3 rounded-lg border border-red-200"></div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">பயனர் பெயர் (Username)</label>
+          <input type="text" id="admin-user" required class="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-tvk-maroon text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">கடவுச்சொல் (Password)</label>
+          <input type="password" id="admin-pass" required class="w-full px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-tvk-maroon text-sm">
+        </div>
+        <button type="submit" id="admin-submit-btn" class="w-full mt-2 bg-tvk-maroon hover:bg-red-800 text-white font-bold py-2.5 rounded-xl border-b-4 border-red-900 transition-colors shadow-md text-sm tracking-wide cursor-pointer">
+          உள்நுழை (Sign In)
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <?!= include('src/Scripts'); ?>
+</body>
+</html>
